@@ -1,0 +1,8 @@
+const { createClient } = require('@supabase/supabase-js');
+const supabase = createClient("https://zexumnlvkrjryvzrlavp.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpleHVtbmx2a3Jqcnl2enJsYXZwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjM5MzcyMywiZXhwIjoyMDg3OTY5NzIzfQ.v5Cmj_u93WcDMI3ttwYxVCPWoiblQuUJFB2MXSlO8EM");
+
+async function run() {
+  const { data: comments, error } = await supabase.from('idea_comments').select('*').order('created_at', { ascending: false }).limit(5);
+  console.log("COMMENTS:", JSON.stringify(comments || []));
+}
+run();

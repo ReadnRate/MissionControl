@@ -1,0 +1,53 @@
+{
+  "name": "BookTok News to Social Posts",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://www.thebookseller.com/rss/news"
+      },
+      "id": "1",
+      "name": "RSS Feed",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [ 200, 300 ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{$json[\"content\"]}}",
+        "options": {
+          "systemMessage": "Tu es un CM pour Read & Rate. Prends cet article sur l'édition et crée un tweet provocateur (140 char max) posant une question aux auteurs indés."
+        }
+      },
+      "id": "2",
+      "name": "Gemini AI",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [ 400, 300 ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.later.com/v1/posts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "text", "value": "={{$json[\"text\"]}}" },
+            { "name": "platforms", "value": "[\"twitter\", \"linkedin\"]" }
+          ]
+        }
+      },
+      "id": "3",
+      "name": "Later API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [ 600, 300 ]
+    }
+  ],
+  "connections": {
+    "RSS Feed": { "main": [ [ { "node": "Gemini AI", "type": "main", "index": 0 } ] ] },
+    "Gemini AI": { "main": [ [ { "node": "Later API", "type": "main", "index": 0 } ] ] }
+  }
+}

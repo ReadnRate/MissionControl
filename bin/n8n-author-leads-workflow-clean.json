@@ -1,0 +1,237 @@
+{
+  "name": "Author Lead Machine (Tavily Crawl + LLM)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "process-author-url",
+        "options": {}
+      },
+      "id": "e8e50f38-8fae-4589-b7b5-24e542ccfe8b",
+      "name": "Webhook (Incoming URL)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        200,
+        300
+      ],
+      "webhookId": "author-lead-processor"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/extract",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"api_key\": \"{{ $env.TAVILY_API_KEY }}\",\n  \"urls\": [\"{{ $('Webhook (Incoming URL)').item.json.body.url }}\"],\n  \"extract_depth\": \"advanced\",\n  \"include_images\": false\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "7dc2ba31-0dfb-402f-b44c-978ea902f83d",
+      "name": "Tavily Crawl",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "messageValues": [
+            {
+              "role": "system",
+              "content": "You are a precise data extraction agent. Your job is to analyze website text and find the personal email address of the author. \n\nRULES:\n1. If an email address IS found, output ONLY a valid JSON object with these keys: `first_name`, `last_name`, `email`, `book_title`, `genre`, `personalization_text`. Use null for missing data (except email/first_name).\n2. If NO personal email is found, or if it is a generic support email (info@, support@, etc.), output ONLY the exact string: NO_EMAIL\n\nDo not include markdown blocks or any other text."
+            },
+            {
+              "content": "=Website URL: {{ $('Webhook (Incoming URL)').item.json.body.url }}\n\nWebsite Crawl Content:\n{{ $json.results[0].raw_content }}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "c869273c-bb49-43c7-ad8c-a111a9e992b4",
+      "name": "OpenAI (Extract Data)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [
+        640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.message.content }}",
+              "operation": "notEqual",
+              "value2": "NO_EMAIL"
+            }
+          ]
+        }
+      },
+      "id": "218fa65f-4a37-4d7a-b5e1-5fbbf83efef5",
+      "name": "Email Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        860,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const parsedData = JSON.parse($input.item.json.message.content);\n  parsedData.website_url = $('Webhook (Incoming URL)').item.json.body.url;\n  parsedData.status = 'new';\n  return parsedData;\n} catch (e) {\n  // If parsing fails, don't return anything (stops flow)\n  return [];\n}"
+      },
+      "id": "895dc553-61a9-4674-bf83-fcfd380eeb76",
+      "name": "Parse JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list",
+          "cachedResultName": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "author_leads",
+          "mode": "list",
+          "cachedResultName": "author_leads"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData"
+        },
+        "options": {
+          "onConflict": "email"
+        }
+      },
+      "id": "31b14644-8461-41db-88a4-54c37e6f8cd5",
+      "name": "Supabase (Upsert Lead)",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "content": "No email found or error. End of line."
+      },
+      "id": "426f03d6-444f-4dcb-94c6-d98c0b54e3d7",
+      "name": "Stop (No Action)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1080,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Webhook Trigger\nSends a URL to the process.\n`{ \"url\": \"https://example.com\" }`",
+        "height": 260,
+        "width": 240
+      },
+      "id": "1",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        220
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook (Incoming URL)": {
+      "main": [
+        [
+          {
+            "node": "Tavily Crawl",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tavily Crawl": {
+      "main": [
+        [
+          {
+            "node": "OpenAI (Extract Data)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI (Extract Data)": {
+      "main": [
+        [
+          {
+            "node": "Email Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Found?": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stop (No Action)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse JSON": {
+      "main": [
+        [
+          {
+            "node": "Supabase (Upsert Lead)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

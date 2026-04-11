@@ -1,0 +1,191 @@
+{
+  "name": "Author Lead Generation (Basic Nodes Only)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "author-lead-gen",
+        "options": {}
+      },
+      "id": "1",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "author-lead-gen-webhook"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/extract",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"api_key\": \"{{ $env.TAVILY_API_KEY }}\",\n  \"urls\": [\"{{ $('Webhook').item.json.body.url }}\"],\n  \"extract_depth\": \"advanced\",\n  \"include_images\": false\n}",
+        "options": {}
+      },
+      "id": "2",
+      "name": "Tavily Crawl",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a precise data extraction agent. If an email IS found, output ONLY a valid JSON object with keys: first_name, last_name, email, book_title, genre, personalization_text. If NO personal email is found, output ONLY: NO_EMAIL\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"URL: {{ $('Webhook').item.json.body.url }}\\nContent:\\n{{ $json.results[0].raw_content }}\"\n    }\n  ],\n  \"temperature\": 0\n}",
+        "options": {}
+      },
+      "id": "3",
+      "name": "OpenAI API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.choices[0].message.content }}",
+              "operation": "notEqual",
+              "value2": "NO_EMAIL"
+            }
+          ]
+        }
+      },
+      "id": "4",
+      "name": "If Email Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [
+        600,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list",
+          "cachedResultName": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "author_leads",
+          "mode": "list",
+          "cachedResultName": "author_leads"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData"
+        },
+        "options": {
+          "onConflict": "email"
+        }
+      },
+      "id": "5",
+      "name": "Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  let content = $input.item.json.message ? $input.item.json.message.content : $input.item.json.choices[0].message.content;\n  const parsedData = JSON.parse(content);\n  parsedData.website_url = $('Webhook').item.json.body.url;\n  parsedData.status = 'new';\n  return parsedData;\n} catch (e) {\n  return [];\n}"
+      },
+      "id": "parse-json-1773894919893",
+      "name": "Parse JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Tavily Crawl",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tavily Crawl": {
+      "main": [
+        [
+          {
+            "node": "OpenAI API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI API": {
+      "main": [
+        [
+          {
+            "node": "If Email Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Email Found": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse JSON": {
+      "main": [
+        [
+          {
+            "node": "Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {}
+}
