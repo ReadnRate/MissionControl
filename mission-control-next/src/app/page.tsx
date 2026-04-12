@@ -1,28 +1,42 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Terminal, Zap, CheckCircle2, Clock, Eye, Activity, Database } from 'lucide-react';
+import { Terminal, Zap, CheckCircle2, Clock, Activity, Database, TrendingUp, Users } from 'lucide-react';
 
 const AGENTS = [
-  { id: 'joe', name: 'Joe', role: 'Orchestrator', emoji: '🦞' },
-  { id: 'forge', name: 'Forge', role: 'Developer', emoji: '🔨' },
-  { id: 'aura', name: 'Aura', role: 'Marketing', emoji: '✨' },
-  { id: 'beacon', name: 'Beacon', role: 'Research', emoji: '🔥' },
+  { id: 'joe',         name: 'Joe',        role: 'Orchestrator', color: 'bg-violet-500' },
+  { id: 'forge',       name: 'Forge',      role: 'Developer',    color: 'bg-cyan-500'   },
+  { id: 'aura',        name: 'Aura',       role: 'Marketing',    color: 'bg-pink-500'   },
+  { id: 'beacon',      name: 'Beacon',     role: 'Research',     color: 'bg-amber-500'  },
 ];
+
+const STATUS_COLOR: Record<string, string> = {
+  done:           'text-emerald-400',
+  in_progress:    'text-amber-400',
+  todo:           'text-slate-400',
+  backlog:        'text-slate-500',
+  pending_review: 'text-violet-400',
+};
+
+const STATUS_DOT: Record<string, string> = {
+  done:           'bg-emerald-500',
+  in_progress:    'bg-amber-400 animate-pulse',
+  todo:           'bg-slate-600',
+  backlog:        'bg-slate-700',
+  pending_review: 'bg-violet-500',
+};
 
 export default function Home() {
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<any>({
+  const [stats, setStats] = useState({
     tasksTotal: 0, tasksDone: 0, tasksInProgress: 0, tasksPending: 0,
     authorLeads: 0, trymLeads: 0,
     outreachSent: 0, outreachBounced: 0,
   });
-  const [activities, setActivities] = useState<any[]>([]);
+  const [activities, setActivities]   = useState<any[]>([]);
   const [recentTasks, setRecentTasks] = useState<any[]>([]);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
   async function fetchData() {
     setLoading(true);
@@ -43,187 +57,190 @@ export default function Home() {
         supabase.from('intel').select('*').order('created_at', { ascending: false }).limit(5),
       ]);
 
-      const tasks = allTasks || [];
-      const outreachData = outreach || [];
-      const ideasData = ideas || [];
-      const intelData = intel || [];
-
-      const tasksDone = tasks.filter((t: any) => t.status === 'done').length;
-      const tasksInProgress = tasks.filter((t: any) => t.status === 'in_progress').length;
-      const tasksPending = tasks.filter((t: any) => ['todo', 'backlog', 'pending_review'].includes(t.status)).length;
-      const outreachSent = outreachData.filter((o: any) => o.status === 'sent').length;
-      const outreachBounced = outreachData.filter((o: any) => ['bounced', 'failed'].includes(o.status)).length;
+      const tasks        = allTasks || [];
+      const outreachData = outreach  || [];
+      const ideasData    = ideas     || [];
+      const intelData    = intel     || [];
 
       setStats({
-        tasksTotal: tasks.length,
-        tasksDone,
-        tasksInProgress,
-        tasksPending,
-        authorLeads: authorCount ?? 0,
-        trymLeads: trymCount ?? 0,
-        outreachSent,
-        outreachBounced,
+        tasksTotal:      tasks.length,
+        tasksDone:       tasks.filter((t: any) => t.status === 'done').length,
+        tasksInProgress: tasks.filter((t: any) => t.status === 'in_progress').length,
+        tasksPending:    tasks.filter((t: any) => ['todo', 'backlog', 'pending_review'].includes(t.status)).length,
+        authorLeads:     authorCount ?? 0,
+        trymLeads:       trymCount   ?? 0,
+        outreachSent:    outreachData.filter((o: any) => o.status === 'sent').length,
+        outreachBounced: outreachData.filter((o: any) => ['bounced', 'failed'].includes(o.status)).length,
       });
 
-      setRecentTasks(tasks.slice(0, 6));
+      setRecentTasks(tasks.slice(0, 8));
 
-      // Build activity feed from tasks + ideas + intel
       const rawActivities = [
-        ...tasks.map((t: any) => ({ ...t, activityType: 'task', title: t.title, created_at: t.updated_at || t.created_at })),
-        ...ideasData.map((i: any) => ({ ...i, activityType: 'idea', title: i.title })),
-        ...intelData.map((i: any) => ({ ...i, activityType: 'intel', title: i.title || i.source_name || 'Intel Item' })),
-      ].filter(a => a.created_at)
-       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-       .slice(0, 10);
+        ...tasks.map((t: any)    => ({ ...t, activityType: 'task',  title: t.title,                              ts: t.updated_at || t.created_at })),
+        ...ideasData.map((i: any) => ({ ...i, activityType: 'idea',  title: i.title,                              ts: i.created_at })),
+        ...intelData.map((i: any) => ({ ...i, activityType: 'intel', title: i.title || i.source_name || 'Intel', ts: i.created_at })),
+      ]
+        .filter(a => a.ts)
+        .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())
+        .slice(0, 12);
 
       setActivities(rawActivities);
     } catch (e) {
-      console.error("Data fetch error:", e);
+      console.error('fetchData error:', e);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 text-slate-700 font-mono">
-      <header className="flex items-center justify-between border-b border-slate-200 pb-4">
+    <div className="p-6 space-y-6 min-h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tighter">Agent Command Center</h1>
-          <p className="text-sm text-slate-500 mt-2 font-medium">Live status board & direct communication interface</p>
+          <h1 className="text-xl font-bold text-white">Command Center</h1>
+          <p className="text-xs text-slate-500 mt-0.5">Live status — agents, tasks, leads</p>
         </div>
-      </header>
+        <div className="flex items-center gap-2 text-xs text-emerald-400 font-mono bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-full">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          System online
+        </div>
+      </div>
 
       {loading ? (
         <div className="flex items-center justify-center h-64">
-           <div className="flex flex-col items-center gap-4">
-              <div className="w-8 h-8 border-2 border-cyan-600 border-t-transparent rounded-full animate-spin" />
-              <span className="text-xs font-bold text-cyan-600 uppercase tracking-widest animate-pulse">Syncing Core DB...</span>
-           </div>
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-7 h-7 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
+            <span className="text-xs text-slate-500 font-mono tracking-widest">SYNCING…</span>
+          </div>
         </div>
       ) : (
         <>
-          {/* Stats Row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <StatCard label="Total Tasks" value={stats.tasksTotal} sub={`${stats.tasksDone} done · ${stats.tasksInProgress} active`} color="text-cyan-600" />
-            <StatCard label="Author Leads" value={stats.authorLeads} sub="in database" color="text-emerald-600" />
-            <StatCard label="Trym Leads" value={stats.trymLeads} sub="in database" color="text-violet-600" />
-            <StatCard label="Emails Sent" value={stats.outreachSent} sub={`${stats.outreachBounced} bounced/failed`} color="text-amber-600" />
+          {/* Stat strip */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatCard icon={<Terminal size={14} />}    label="Tasks"        value={stats.tasksTotal}   sub={`${stats.tasksDone} done · ${stats.tasksInProgress} active`} accent="cyan"    />
+            <StatCard icon={<Users size={14} />}       label="Author Leads" value={stats.authorLeads}  sub="in database"                                                  accent="violet"  />
+            <StatCard icon={<TrendingUp size={14} />}  label="Trym Leads"   value={stats.trymLeads}    sub="in database"                                                  accent="emerald" />
+            <StatCard icon={<Activity size={14} />}    label="Emails Sent"  value={stats.outreachSent} sub={`${stats.outreachBounced} bounced / failed`}                 accent="amber"   />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Main Content */}
-            <div className="lg:col-span-2 space-y-8">
-              {/* Active Agents */}
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <Terminal size={20} className="text-cyan-600" />
-                  <h2 className="text-lg font-bold text-slate-900 uppercase tracking-wider">Active Agents</h2>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {AGENTS.map((agent) => {
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            {/* Left col */}
+            <div className="lg:col-span-2 space-y-5">
+              {/* Agents */}
+              <Section icon={<Terminal size={14} className="text-cyan-400" />} title="Active Agents">
+                <div className="grid grid-cols-2 gap-3">
+                  {AGENTS.map(agent => {
                     const agentTasks = recentTasks.filter((t: any) => t.assigned_to === agent.name);
                     return (
-                      <div key={agent.id} className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm hover:border-cyan-300 transition-all">
-                        <div className="flex justify-between items-start mb-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-cyan-50 border border-cyan-200 flex items-center justify-center text-lg shadow-sm">
-                              {agent.emoji}
+                      <div key={agent.id} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 hover:border-slate-600 transition-colors">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-7 h-7 rounded-lg ${agent.color} flex items-center justify-center`}>
+                              <span className="text-white font-bold text-xs">{agent.name[0]}</span>
                             </div>
                             <div>
-                              <h3 className="font-bold text-slate-900">{agent.name}</h3>
-                              <p className="text-xs text-slate-500">{agent.role}</p>
+                              <p className="text-sm font-semibold text-white leading-tight">{agent.name}</p>
+                              <p className="text-[10px] text-slate-500">{agent.role}</p>
                             </div>
                           </div>
-                          <span className="flex h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
                         </div>
-                        <div className="space-y-2 mt-4">
+                        <div className="space-y-1.5">
                           {agentTasks.slice(0, 2).map((task: any) => (
-                            <div key={task.id} className="flex items-start gap-2 p-2 rounded-lg bg-slate-50 border border-slate-100">
-                              {task.status === 'done' ? (
-                                <CheckCircle2 size={14} className="text-emerald-500 mt-0.5 shrink-0" />
-                              ) : task.status === 'in_progress' ? (
-                                <Zap size={14} className="text-amber-500 mt-0.5 shrink-0 animate-pulse" />
-                              ) : (
-                                <Clock size={14} className="text-slate-400 mt-0.5 shrink-0" />
-                              )}
-                              <span className="text-xs text-slate-600 line-clamp-2">{task.title}</span>
+                            <div key={task.id} className="flex items-start gap-2 p-2 rounded-lg bg-slate-900/60 border border-slate-800">
+                              <span className={`mt-0.5 w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[task.status] ?? 'bg-slate-600'}`} />
+                              <span className="text-xs text-slate-300 line-clamp-2 leading-relaxed">{task.title}</span>
                             </div>
                           ))}
                           {agentTasks.length === 0 && (
-                            <p className="text-xs text-slate-400 italic">No active tasks</p>
+                            <p className="text-xs text-slate-600 italic">No active tasks</p>
                           )}
                         </div>
                       </div>
                     );
                   })}
                 </div>
-              </div>
+              </Section>
 
-              {/* Recent Activity */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-                <h2 className="text-lg font-bold text-slate-900 uppercase tracking-wider mb-6 flex items-center gap-2">
-                  <Activity size={18} className="text-blue-600" />
-                  Global Activity Feed
-                </h2>
-                <div className="space-y-4">
+              {/* Activity feed */}
+              <Section icon={<Activity size={14} className="text-blue-400" />} title="Activity Feed">
+                <div className="space-y-2">
                   {activities.length === 0 ? (
-                    <p className="text-sm text-slate-400 text-center py-4">No recent activity</p>
+                    <p className="text-sm text-slate-600 text-center py-6">No recent activity</p>
                   ) : (
-                    activities.map((activity: any, idx: number) => (
-                      <div key={idx} className="flex items-start gap-4 p-3 rounded-lg bg-slate-50 border border-slate-100 hover:border-slate-200 transition-colors">
-                        <div className="mt-1">
-                          {activity.activityType === 'task' && <Clock size={16} className="text-cyan-600" />}
-                          {activity.activityType === 'idea' && <Zap size={16} className="text-yellow-500" />}
-                          {activity.activityType === 'intel' && <Database size={16} className="text-purple-500" />}
+                    activities.map((a: any, idx: number) => (
+                      <div key={idx} className="flex items-start gap-3 p-3 rounded-lg bg-slate-800/40 border border-slate-700/40 hover:border-slate-600/60 transition-colors">
+                        <div className="mt-0.5 shrink-0">
+                          {a.activityType === 'task'  && <Clock    size={13} className="text-cyan-500"   />}
+                          {a.activityType === 'idea'  && <Zap      size={13} className="text-yellow-400" />}
+                          {a.activityType === 'intel' && <Database size={13} className="text-violet-400" />}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                              {activity.activityType}
-                            </span>
-                            <span className="text-xs text-slate-400 whitespace-nowrap">
-                              {new Date(activity.created_at).toLocaleString()}
+                          <div className="flex items-center justify-between gap-2 mb-0.5">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{a.activityType}</span>
+                            <span className="text-[10px] text-slate-600 whitespace-nowrap shrink-0">
+                              {new Date(a.ts).toLocaleString()}
                             </span>
                           </div>
-                          <p className="text-sm text-slate-800 truncate font-medium">
-                            {activity.title}
-                          </p>
-                          {activity.description && (
-                            <p className="text-xs text-slate-500 mt-1 line-clamp-1">
-                              {activity.description}
-                            </p>
+                          <p className="text-xs text-slate-200 truncate font-medium">{a.title}</p>
+                          {a.description && (
+                            <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-1">{a.description}</p>
                           )}
                         </div>
                       </div>
                     ))
                   )}
                 </div>
-              </div>
+              </Section>
             </div>
 
-            {/* Sidebar - Chat placeholder */}
-            <div className="space-y-6">
-              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Quick Stats</h3>
+            {/* Right col */}
+            <div className="space-y-5">
+              {/* Task breakdown */}
+              <Section icon={<CheckCircle2 size={14} className="text-emerald-400" />} title="Task Breakdown">
                 <div className="space-y-3">
+                  {[
+                    { label: 'Done',        value: stats.tasksDone,       color: 'bg-emerald-500' },
+                    { label: 'In Progress', value: stats.tasksInProgress, color: 'bg-amber-400'   },
+                    { label: 'Pending',     value: stats.tasksPending,    color: 'bg-slate-600'   },
+                  ].map(row => (
+                    <div key={row.label}>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-400">{row.label}</span>
+                        <span className="text-white font-semibold">{row.value}</span>
+                      </div>
+                      <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full ${row.color} rounded-full transition-all`}
+                          style={{ width: stats.tasksTotal > 0 ? `${(row.value / stats.tasksTotal) * 100}%` : '0%' }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Section>
+
+              {/* Outreach */}
+              <Section icon={<Activity size={14} className="text-pink-400" />} title="Outreach">
+                <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <span className="text-xs text-slate-500">Tasks Done</span>
-                    <span className="text-sm font-bold text-emerald-600">{stats.tasksDone}</span>
+                    <span className="text-xs text-slate-400">Sent</span>
+                    <span className="text-sm font-bold text-white">{stats.outreachSent}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-xs text-slate-500">In Progress</span>
-                    <span className="text-sm font-bold text-amber-600">{stats.tasksInProgress}</span>
+                    <span className="text-xs text-slate-400">Bounced / Failed</span>
+                    <span className="text-sm font-bold text-red-400">{stats.outreachBounced}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-xs text-slate-500">Pending</span>
-                    <span className="text-sm font-bold text-slate-600">{stats.tasksPending}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-slate-500">Outreach Sent</span>
-                    <span className="text-sm font-bold text-cyan-600">{stats.outreachSent}</span>
+                    <span className="text-xs text-slate-400">Delivery rate</span>
+                    <span className="text-sm font-bold text-emerald-400">
+                      {stats.outreachSent > 0
+                        ? `${Math.round(((stats.outreachSent - stats.outreachBounced) / stats.outreachSent) * 100)}%`
+                        : '—'}
+                    </span>
                   </div>
                 </div>
-              </div>
+              </Section>
             </div>
           </div>
         </>
@@ -232,12 +249,38 @@ export default function Home() {
   );
 }
 
-function StatCard({ label, value, sub, color }: { label: string; value: number; sub?: string; color: string }) {
+// ─── Sub-components ─────────────────────────────────────────────────────────
+
+const ACCENT_MAP: Record<string, string> = {
+  cyan:    'text-cyan-400',
+  violet:  'text-violet-400',
+  emerald: 'text-emerald-400',
+  amber:   'text-amber-400',
+};
+
+function StatCard({ icon, label, value, sub, accent }: {
+  icon: React.ReactNode; label: string; value: number; sub?: string; accent: string;
+}) {
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-      <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">{label}</div>
-      <div className={`text-2xl font-black ${color}`}>{value}</div>
-      {sub && <div className="text-xs text-slate-400 mt-1">{sub}</div>}
+    <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+      <div className={`flex items-center gap-1.5 text-xs font-medium mb-2 ${ACCENT_MAP[accent] ?? 'text-slate-400'}`}>
+        {icon}
+        <span className="uppercase tracking-wide">{label}</span>
+      </div>
+      <div className="text-2xl font-black text-white leading-none mb-1">{value.toLocaleString()}</div>
+      {sub && <div className="text-[10px] text-slate-500">{sub}</div>}
+    </div>
+  );
+}
+
+function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-slate-800/30 border border-slate-700/40 rounded-xl p-5">
+      <div className="flex items-center gap-2 mb-4">
+        {icon}
+        <h2 className="text-xs font-semibold text-slate-300 uppercase tracking-widest">{title}</h2>
+      </div>
+      {children}
     </div>
   );
 }
