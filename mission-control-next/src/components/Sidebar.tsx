@@ -83,7 +83,7 @@ export default function Sidebar() {
         ))}
       </nav>
       <div className="p-4 border-t border-slate-800 text-xs text-slate-500 font-mono text-center">
-        V5.1 Core System
+        ReadnRate · Mission Control
       </div>
     </aside>
   );

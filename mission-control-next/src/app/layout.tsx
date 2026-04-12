@@ -6,7 +6,7 @@ import Sidebar from "@/components/Sidebar";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Mission Control | OpenClaw",
+  title: "Mission Control | ReadnRate",
   description: "Executive Command Center",
   icons: {
     icon: "/favicon.png",
