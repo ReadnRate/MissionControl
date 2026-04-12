@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 
-const PAUSE_FILE = "/data/.openclaw/workspace/.outreach_paused";
+const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT ?? '/data/workspace';
+const PAUSE_FILE = `${WORKSPACE_ROOT}/.outreach_paused`;
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
