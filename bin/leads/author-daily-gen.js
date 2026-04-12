@@ -1,21 +1,12 @@
-import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
 
-const envPath = path.join('/data/.openclaw/workspace', '.env');
-const envFile = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
-const envVars = Object.fromEntries(
-  envFile.split('\n')
-    .filter(line => line && !line.startsWith('#') && line.includes('='))
-    .map(line => {
-        let i = line.indexOf('=');
-        let key = line.slice(0, i).trim();
-        let val = line.slice(i+1).trim().replace(/^"(.*)"$/, '$1');
-        return [key, val];
-    })
-);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, '../../.env') });
 
-const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, BRAVE_SEARCH_API_KEY, TAVILY_API_KEY } = envVars;
+const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, BRAVE_SEARCH_API_KEY, TAVILY_API_KEY } = process.env;
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const TARGET_LEADS = 50;

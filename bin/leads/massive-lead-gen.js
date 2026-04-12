@@ -1,9 +1,22 @@
-import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
+import dotenv from 'dotenv';
 
-const SUPABASE_URL = "https://zexumnlvkrjryvzrlavp.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpleHVtbmx2a3Jqcnl2enJsYXZwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjM5MzcyMywiZXhwIjoyMDg3OTY5NzIzfQ.v5Cmj_u93WcDMI3ttwYxVCPWoiblQuUJFB2MXSlO8EM";
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, '../../.env') });
+
+const DRY_RUN = process.argv.includes('--dry-run');
+if (DRY_RUN) console.log('[DRY RUN] No writes will be made to Supabase.\n');
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment.');
+  process.exit(1);
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -44,15 +57,19 @@ async function generateAndInsert(count) {
       batch.push(generateRandomAuthor());
     }
     
-    const { error } = await supabase
-      .from('author_leads')
-      .insert(batch);
-      
-    if (error) {
-      console.error(`Error inserting batch ${i}:`, error);
-    } else {
+    if (DRY_RUN) {
       successCount += currentBatchSize;
-      console.log(`Inserted ${successCount}/${count} leads...`);
+      console.log(`[DRY RUN] Would insert ${successCount}/${count} leads...`);
+    } else {
+      const { error } = await supabase
+        .from('author_leads')
+        .insert(batch);
+      if (error) {
+        console.error(`Error inserting batch ${i}:`, error);
+      } else {
+        successCount += currentBatchSize;
+        console.log(`Inserted ${successCount}/${count} leads...`);
+      }
     }
     
     await new Promise(r => setTimeout(r, 100));

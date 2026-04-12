@@ -1,7 +1,6 @@
-const fs = require('fs');
-const env = fs.readFileSync('/data/.openclaw/workspace/.env', 'utf8');
-const url = env.match(/SUPABASE_URL="(.*?)"/)[1];
-const key = env.match(/SUPABASE_SERVICE_ROLE_KEY="(.*?)"/)[1];
+require('dotenv').config({ path: require('path').join(__dirname, '../../.env') });
+const url = process.env.SUPABASE_URL;
+const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 async function run() {
   // Check tables

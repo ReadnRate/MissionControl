@@ -6,9 +6,11 @@
  */
 const { spawn } = require('child_process');
 const fs = require('fs');
+const path = require('path');
 
-const SCRIPT = '/data/.openclaw/workspace/bin/author-daily-gen.js';
-const LAST_RUN_FILE = '/data/.openclaw/workspace/inbox/.author_daily_lastrun';
+const SCRIPT = path.join(__dirname, 'author-daily-gen.js');
+const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT ?? path.join(__dirname, '../..');
+const LAST_RUN_FILE = path.join(WORKSPACE_ROOT, 'inbox/.author_daily_lastrun');
 const CHECK_INTERVAL_MS = 60 * 1000; // check every minute
 
 function getEasternNow() {
@@ -37,7 +39,7 @@ function markRan() {
 function runScript() {
   return new Promise((resolve) => {
     console.log('[scheduler] 8 AM EST — launching author-daily-gen.js...');
-    const child = spawn('node', [SCRIPT], { cwd: '/data/.openclaw/workspace/bin' });
+    const child = spawn('node', [SCRIPT], { cwd: __dirname });
     let out = '';
     child.stdout.on('data', d => out += d.toString());
     child.stderr.on('data', d => out += d.toString());

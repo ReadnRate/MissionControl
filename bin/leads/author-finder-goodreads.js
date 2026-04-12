@@ -1,6 +1,6 @@
 const axios = require('axios');
 const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config({ path: '/data/.openclaw/workspace/.env' });
+require('dotenv').config({ path: require('path').join(__dirname, '../../.env') });
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

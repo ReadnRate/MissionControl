@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import json
-import time
 import os
+import time
+from pathlib import Path
 
 def generate_leads():
     print("Starting massive lead generation for Read & Rate authors...")
@@ -22,7 +23,10 @@ def generate_leads():
         {"name": "Haruki Murakami", "email": "hmurakami@tokyo-writes.jp", "verified": True}
     ]
     
-    output_path = '/data/.openclaw/workspace/leads.json'
+    output_path = os.environ.get(
+        'LEADS_OUTPUT_PATH',
+        str(Path(__file__).resolve().parents[2] / 'leads.json')
+    )
     with open(output_path, 'w') as f:
         json.dump(leads, f, indent=4)
         
