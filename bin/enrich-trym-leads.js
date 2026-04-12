@@ -153,35 +153,22 @@ async function supabaseUpdate(id, data) {
   });
 }
 
-// ─── Main ───────────────────────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
-async function main() {
-  const limit = parseInt(process.argv[2] || '50');
-  console.log(`Fetching ${limit} leads with logo_url=is.null...`);
+async function fetchBatch(limit) {
+  const url = `${SUPABASE_URL}/rest/v1/trym_leads?select=id,business_name,website,city&logo_url=is.null&limit=${limit}&order=created_at.asc`;
+  const raw = await new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const req = https.get({
+      hostname: u.hostname, path: u.pathname + u.search,
+      headers: { 'apikey': SERVICE_KEY, 'Authorization': `Bearer ${SERVICE_KEY}` }
+    }, res => { let d = ''; res.on('data', c => d += c); res.on('end', () => resolve(d)); });
+    req.on('error', reject); req.end();
+  });
+  return JSON.parse(raw);
+}
 
-  const fetchUrl = `${SUPABASE_URL}/rest/v1/trym_leads?select=id,business_name,website,city&logo_url=is.null&limit=${limit}&order=created_at.asc`;
-  let data;
-  try {
-    const raw = await new Promise((resolve, reject) => {
-      const u = new URL(fetchUrl);
-      const req = https.get({
-        hostname: u.hostname, path: u.pathname + u.search,
-        headers: { 'apikey': SERVICE_KEY, 'Authorization': `Bearer ${SERVICE_KEY}` }
-      }, res => { let d = ''; res.on('data', c => d += c); res.on('end', () => resolve(d)); });
-      req.on('error', reject); req.end();
-    });
-    data = JSON.parse(raw);
-  } catch (e) {
-    console.log('Failed to fetch leads:', e.message);
-    return;
-  }
-
-  if (!Array.isArray(data) || data.length === 0) {
-    console.log('All leads already enriched! Done.');
-    return;
-  }
-
-  console.log(`Processing ${data.length} leads...`);
+async function processBatch(data) {
   let enriched = 0, skipped = 0;
 
   for (let i = 0; i < data.length; i++) {
@@ -225,9 +212,62 @@ async function main() {
     await new Promise(r => setTimeout(r, 2000));
   }
 
-  console.log(`\n=== DONE ===`);
-  console.log(`  Enriched: ${enriched}`);
-  console.log(`  Skipped:  ${skipped}`);
+  return { enriched, skipped };
+}
+
+// ─── Main ───────────────────────────────────────────────────────────────────
+
+async function main() {
+  const args  = process.argv.slice(2);
+  const loop  = args.includes('--loop');
+  const limit = parseInt(args.find(a => /^\d+$/.test(a)) || '50');
+
+  let round = 0;
+  let totalEnriched = 0;
+  let totalSkipped  = 0;
+
+  do {
+    round++;
+    if (loop) console.log(`\n${'─'.repeat(50)}\n[Loop] Round ${round} — fetching up to ${limit} leads…`);
+    else      console.log(`Fetching ${limit} leads with logo_url=is.null...`);
+
+    let data;
+    try {
+      data = await fetchBatch(limit);
+    } catch (e) {
+      console.log('Failed to fetch leads:', e.message);
+      break;
+    }
+
+    if (!Array.isArray(data) || data.length === 0) {
+      console.log('All leads already enriched! Done.');
+      break;
+    }
+
+    console.log(`Processing ${data.length} leads...`);
+    const { enriched, skipped } = await processBatch(data);
+    totalEnriched += enriched;
+    totalSkipped  += skipped;
+
+    console.log(`\n=== Round ${round} done — enriched: ${enriched}, skipped: ${skipped} ===`);
+
+    if (loop && data.length === limit) {
+      console.log('[Loop] Pausing 5 s before next round…');
+      await new Promise(r => setTimeout(r, 5000));
+    }
+
+  } while (loop);
+
+  if (loop) {
+    console.log(`\n${'═'.repeat(50)}`);
+    console.log(`[Loop] All rounds complete.`);
+    console.log(`  Total enriched: ${totalEnriched}`);
+    console.log(`  Total skipped:  ${totalSkipped}`);
+  } else {
+    console.log(`\n=== DONE ===`);
+    console.log(`  Enriched: ${totalEnriched}`);
+    console.log(`  Skipped:  ${totalSkipped}`);
+  }
 }
 
 main().catch(e => { console.error('Fatal:', e.message); process.exit(1); });
