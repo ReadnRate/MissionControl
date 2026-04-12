@@ -14,6 +14,21 @@ const SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+/**
+ * Normalise a raw src/href to an absolute https URL.
+ * Returns null for anything that can't be resolved (data:, blob:, empty, etc.)
+ */
+function resolveUrl(src, base) {
+  if (!src) return null;
+  src = src.trim();
+  if (!src || src.startsWith('data:') || src.startsWith('blob:')) return null;
+  if (src.startsWith('//')) return 'https:' + src;
+  if (src.startsWith('http://') || src.startsWith('https://')) return src;
+  // Relative path — resolve against the page's origin
+  if (!base) return null;
+  try { return new URL(src, base).href; } catch { return null; }
+}
+
 function fetchUrl(url, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
     const proto = url.startsWith('https') ? https : http;
@@ -31,35 +46,36 @@ function fetchUrl(url, timeoutMs = 10000) {
   });
 }
 
-function extractImages(html) {
+function extractImages(html, base) {
   const seen = new Set();
   const imgs = [];
   for (const m of html.matchAll(/<img[^>]+src="([^"]+)"/gi)) {
-    const s = m[1];
-    if (!s.startsWith('data:') && !s.includes('sprite') && !s.includes('icon') && !s.includes('1x1') && !seen.has(s)) {
-      seen.add(s);
-      imgs.push(s);
-    }
+    const resolved = resolveUrl(m[1], base);
+    if (!resolved) continue;
+    if (resolved.includes('sprite') || resolved.includes('1x1')) continue;
+    if (!seen.has(resolved)) { seen.add(resolved); imgs.push(resolved); }
   }
   return imgs.slice(0, 15);
 }
 
-function extractHero(html) {
-  // og:image first
+function extractHero(html, base) {
+  // og:image first (already absolute in well-formed HTML, but resolve just in case)
   const og = html.match(/<meta property="og:image"[^>]*content="([^"]+)"/i);
-  if (og) return og[1];
-  // Then hero candidates
-  const imgs = [...html.matchAll(/<img[^>]+src="([^"]+)"/gi)].map(m => m[1]);
-  const hero = imgs.find(s => s.match(/hero|banner|slider|main|showcase|IMG_|slide/i));
+  if (og) { const u = resolveUrl(og[1], base); if (u) return u; }
+  // Then hero candidates from <img>
+  const imgs = [...html.matchAll(/<img[^>]+src="([^"]+)"/gi)]
+    .map(m => resolveUrl(m[1], base)).filter(Boolean);
+  const hero = imgs.find(s => /hero|banner|slider|main|showcase|IMG_|slide/i.test(s));
   return hero || (imgs.length ? imgs[0] : null);
 }
 
-function extractLogo(html) {
-  const imgs = [...html.matchAll(/<img[^>]+src="([^"]+)"/gi)].map(m => m[1]);
-  const logo = imgs.find(s => s.match(/logo/i));
+function extractLogo(html, base) {
+  const imgs = [...html.matchAll(/<img[^>]+src="([^"]+)"/gi)]
+    .map(m => resolveUrl(m[1], base)).filter(Boolean);
+  const logo = imgs.find(s => /logo/i.test(s));
   if (logo) return logo;
   const fav = html.match(/<link[^>]+rel="(?:shortcut )?icon"[^>]*href="([^"]+)"/i);
-  if (fav) return fav[1].startsWith('http') ? fav[1] : null;
+  if (fav) return resolveUrl(fav[1], base);
   return null;
 }
 
@@ -90,9 +106,9 @@ function scrapeWebsite(website) {
     function finish(html, website) {
       if (!html || html.length < 200) { resolve(null); return; }
 
-      const allImgs = extractImages(html);
-      const heroImage = extractHero(html);
-      const logoUrl = extractLogo(html);
+      const allImgs = extractImages(html, website);
+      const heroImage = extractHero(html, website);
+      const logoUrl = extractLogo(html, website);
       const fb = html.match(/facebook\.com\/([^/?\s"']+)/i);
       const ig = html.match(/instagram\.com\/([^/?\s"']+)/i);
 
