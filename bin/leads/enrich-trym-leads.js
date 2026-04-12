@@ -187,7 +187,7 @@ async function main() {
 
   if (!Array.isArray(data) || data.length === 0) {
     console.log('All leads already enriched! Done.');
-    return;
+    return false;
   }
 
   console.log(`Processing ${data.length} leads...`);
@@ -237,6 +237,20 @@ async function main() {
   console.log(`\n=== DONE ===`);
   console.log(`  Enriched: ${enriched}`);
   console.log(`  Skipped:  ${skipped}`);
+  return true;
 }
 
-main().catch(e => { console.error('Fatal:', e.message); process.exit(1); });
+const LOOP = process.argv.includes('--loop');
+
+(async () => {
+  try {
+    let hadWork;
+    do {
+      hadWork = await main();
+      if (LOOP && hadWork) console.log('\n[loop] Continuing to next batch...\n');
+    } while (LOOP && hadWork);
+  } catch (e) {
+    console.error('Fatal:', e.message);
+    process.exit(1);
+  }
+})();
