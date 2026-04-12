@@ -87,15 +87,40 @@ async function fetchStats(): Promise<Stats> {
 
 async function fetchLeads(): Promise<Lead[]> {
   const supabase = getSupabaseAdmin();
+  const COLS = "id,business_name,email,phone,website,city,country,status,created_at,logo_url,hero_image_url,services";
 
-  const { data, error } = await supabase
-    .from("trym_leads")
-    .select("id,business_name,email,phone,website,city,country,status,created_at,logo_url,hero_image_url,services")
-    .order("created_at", { ascending: false })
-    .limit(500);
+  // Fetch in parallel:
+  //   • 500 most-recent leads (captures fresh imports)
+  //   • ALL enriched leads (logo_url or hero_image_url is set)
+  //     — the enrich script processes oldest-first, so enriched rows are
+  //       often outside the 500-newest window above.
+  const [recentRes, enrichedRes] = await Promise.all([
+    supabase
+      .from("trym_leads")
+      .select(COLS)
+      .order("created_at", { ascending: false })
+      .limit(500),
+    supabase
+      .from("trym_leads")
+      .select(COLS)
+      .or("logo_url.not.is.null,hero_image_url.not.is.null,services.not.is.null")
+      .order("created_at", { ascending: false }),
+  ]);
 
-  if (error) throw error;
-  return (data as Lead[]) ?? [];
+  if (recentRes.error) throw recentRes.error;
+
+  // Merge — enriched first so dedup keeps the enriched copy when ids overlap
+  const seen = new Set<string>();
+  const merged: Lead[] = [];
+  for (const lead of [...(enrichedRes.data ?? []), ...(recentRes.data ?? [])]) {
+    if (!seen.has(lead.id)) {
+      seen.add(lead.id);
+      merged.push(lead as Lead);
+    }
+  }
+  // Re-sort by created_at desc for consistent display
+  merged.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  return merged;
 }
 
 export default async function TrymLeadsPage() {
