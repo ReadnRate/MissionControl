@@ -212,6 +212,7 @@ async function processCity(cityRecord) {
     
     if (parsed.length > 0) {
       const inserts = parsed.map(row => {
+        // ── Email: try website_data JSON first, then direct fields ───────────
         let email = null;
         if (row.website_data) {
           try {
@@ -221,21 +222,128 @@ async function processCity(cityRecord) {
             }
           } catch(e) {}
         }
-        if (!email && row.email) email = row.email;
-        if (!email && row.all_emails) email = row.all_emails.split(',')[0];
-        
+        if (!email && row.email)      email = row.email;
+        if (!email && row.all_emails) email = row.all_emails.split(',')[0].trim();
+
+        // ── Helper: pick first truthy value from candidate keys ──────────────
+        const pick = (...keys) => {
+          for (const k of keys) { if (row[k] != null && row[k] !== '') return row[k]; }
+          return null;
+        };
+        const bool = (...keys) => {
+          const v = pick(...keys);
+          if (v === null) return null;
+          return v === true || v === 'true' || v === '1' || v === 'Yes';
+        };
+        const num  = (...keys) => {
+          const v = pick(...keys);
+          return v != null ? parseFloat(v) || null : null;
+        };
+        const int  = (...keys) => {
+          const v = pick(...keys);
+          return v != null ? parseInt(v, 10) || null : null;
+        };
+
         return {
-          business_name: row.name,
-          address: row.location_full_address || row.location_address,
-          city: row.location_city || cityRecord.city,
-          state: row.location_state || cityRecord.state,
-          country: row.location_country_code || cityRecord.country,
-          phone: row.phone,
-          email: email,
-          website: row.website,
-          status: 'new',
-          keyword: keyword,
-          source: 'scrapio'
+          // ── Core ────────────────────────────────────────────────────────────
+          business_name:  pick('name', 'business_name'),
+          address:        pick('full_address', 'location_full_address', 'location_address'),
+          street_1:       pick('street', 'location_street', 'street_1'),
+          street_2:       pick('street_2', 'location_street_2'),
+          city:           pick('city', 'location_city') || cityRecord.city,
+          state:          pick('state', 'location_state') || cityRecord.state,
+          country:        pick('country_code', 'location_country_code', 'country') || cityRecord.country,
+          postal_code:    pick('postal_code', 'location_postal_code', 'zip'),
+          borough:        pick('borough', 'location_borough'),
+          level_1_division: pick('state_long', 'level_1_division'),
+          level_2_division: pick('county', 'level_2_division'),
+          timezone:       pick('timezone'),
+          latitude:       num('latitude', 'lat'),
+          longitude:      num('longitude', 'lng', 'lon'),
+
+          // ── Contact ─────────────────────────────────────────────────────────
+          phone:          pick('phone'),
+          phone_intl:     pick('phone_intl', 'international_phone'),
+          email,
+          email_2:        pick('email_2'),
+          email_3:        pick('email_3'),
+          email_4:        pick('email_4'),
+          email_5:        pick('email_5'),
+          all_emails:     pick('all_emails'),
+          website:        pick('website'),
+          link:           pick('link', 'google_maps_url', 'maps_url'),
+
+          // ── Google IDs ──────────────────────────────────────────────────────
+          google_id:      pick('google_id', 'id'),
+          place_id:       pick('place_id'),
+          cid:            pick('cid'),
+          mid:            pick('mid'),
+
+          // ── Business info ───────────────────────────────────────────────────
+          main_type:      pick('main_type', 'type'),
+          all_types:      pick('all_types', 'types'),
+          description_1:  pick('description', 'description_1'),
+          description_2:  pick('description_2'),
+          description_3:  pick('description_3'),
+          price_range:    pick('price_range', 'price_level'),
+          is_claimed:     bool('is_claimed', 'claimed'),
+          is_closed:      bool('is_closed', 'permanently_closed'),
+          is_closed_temporarily: bool('is_closed_temporarily', 'temporarily_closed'),
+          working_hours:  pick('working_hours', 'hours', 'opening_hours'),
+          occupancy:      pick('occupancy'),
+          characteristics: pick('characteristics', 'amenities'),
+          offerings_link: pick('offerings_link'),
+          hotel_info:     pick('hotel_info'),
+          other_places:   pick('other_places'),
+
+          // ── Reviews ─────────────────────────────────────────────────────────
+          reviews_count:  int('reviews_count', 'review_count', 'reviews'),
+          reviews_rating: num('rating', 'reviews_rating', 'average_rating'),
+          reviews_id:     pick('reviews_id'),
+          reviews_per_score: pick('reviews_per_score'),
+          reviews_tags:   pick('reviews_tags'),
+
+          // ── Photos ──────────────────────────────────────────────────────────
+          photos_count:   int('photos_count', 'photo_count'),
+          photo_1:        pick('photo_1', 'main_photo'),
+          photo_2:        pick('photo_2'),
+          all_photos:     pick('all_photos'),
+          menu_photos:    pick('menu_photos'),
+          photos_360:     pick('photos_360', 'street_view'),
+
+          // ── Social ──────────────────────────────────────────────────────────
+          facebook:       pick('facebook'),
+          instagram:      pick('instagram'),
+          twitter:        pick('twitter'),
+          linkedin:       pick('linkedin'),
+          all_facebook_links:  pick('all_facebook_links'),
+          all_youtube_links:   pick('all_youtube_links'),
+          all_twitter_links:   pick('all_twitter_links'),
+
+          // ── Website meta (from website_data JSON if available) ───────────────
+          website_title:            pick('website_title'),
+          website_meta_keywords:    pick('website_meta_keywords'),
+          website_meta_description: pick('website_meta_description'),
+          website_meta_image:       pick('website_meta_image'),
+          website_meta_generator:   pick('website_meta_generator'),
+          website_lang:             pick('website_lang'),
+
+          // ── Contact pages ────────────────────────────────────────────────────
+          contact_page_1: pick('contact_page_1'),
+          contact_page_2: pick('contact_page_2'),
+          contact_page_3: pick('contact_page_3'),
+          contact_page_4: pick('contact_page_4'),
+          contact_page_5: pick('contact_page_5'),
+          all_contact_pages: pick('all_contact_pages'),
+
+          // ── Booking/ordering ─────────────────────────────────────────────────
+          booking_links:  pick('booking_links', 'reservations'),
+          order_links:    pick('order_links', 'order_online'),
+
+          // ── Meta ─────────────────────────────────────────────────────────────
+          status:  'new',
+          keyword,
+          source:  'scrapio',
         };
       });
       
