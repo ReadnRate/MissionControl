@@ -1,5 +1,13 @@
+import os
 import sys
-sys.path.insert(0, '/data/.openclaw/workspace/skills/n8n/scripts')
+from pathlib import Path
+
+# Allow override via N8N_SCRIPTS_PATH env var, or fall back to a relative path
+_n8n_scripts = os.environ.get(
+    'N8N_SCRIPTS_PATH',
+    str(Path(__file__).resolve().parents[2] / 'skills/n8n/scripts')
+)
+sys.path.insert(0, _n8n_scripts)
 from n8n_api import N8nClient
 
 client = N8nClient()

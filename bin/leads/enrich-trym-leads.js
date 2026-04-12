@@ -2,15 +2,24 @@
 /**
  * enrich-trym-leads.js
  * Enriches trym_leads with: logo_url, hero_image_url, facebook, instagram, google_business_url, services, reviews, photos
- * Usage: node enrich-trym-leads.js [limit=50]
+ * Usage: node enrich-trym-leads.js [limit=50] [--dry-run]
  */
+require('dotenv').config({ path: require('path').join(__dirname, '../../.env') });
 const { execSync } = require('child_process');
 const fs = require('fs');
 const https = require('https');
 const http = require('http');
 
-const SUPABASE_URL = 'https://zexumnlvkrjryvzrlavp.supabase.co';
-const SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpleHVtbmx2a3Jqcnl2enJsYXZwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjM5MzcyMywiZXhwIjoyMDg3OTY5NzIzfQ.v5Cmj_u93WcDMI3ttwYxVCPWoiblQuUJFB2MXSlO8EM';
+const DRY_RUN = process.argv.includes('--dry-run');
+if (DRY_RUN) console.log('[DRY RUN] No writes will be made to Supabase.\n');
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!SUPABASE_URL || !SERVICE_KEY) {
+  console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment.');
+  process.exit(1);
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -211,7 +220,7 @@ async function processBatch(data) {
       }
 
       if (Object.keys(updates).length > 0) {
-        await supabaseUpdate(id, updates);
+        if (!DRY_RUN) await supabaseUpdate(id, updates);
         const keys = Object.keys(updates).join(', ');
         process.stdout.write(`✓ ${keys}\n`);
         enriched++;

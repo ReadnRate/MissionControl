@@ -30,8 +30,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     tasksTotal: 0, tasksDone: 0, tasksInProgress: 0, tasksPending: 0,
-    authorLeads: 0, trymLeads: 0,
-    outreachSent: 0, outreachBounced: 0,
+    authorLeads: 0, trymLeads: 0, outreachSent: 0, outreachBounced: 0,
   });
   const [activities, setActivities]   = useState<any[]>([]);
   const [recentTasks, setRecentTasks] = useState<any[]>([]);
@@ -51,7 +50,7 @@ export default function Home() {
       ] = await Promise.all([
         supabase.from('tasks').select('*'),
         supabase.from('author_leads').select('id', { count: 'exact', head: true }),
-        supabase.from('trym_leads').select('id', { count: 'exact', head: true }),
+        supabase.from('trym_leads').select('id',   { count: 'exact', head: true }),
         supabase.from('outreach_log').select('*'),
         supabase.from('ideas').select('*').order('created_at', { ascending: false }).limit(5),
         supabase.from('intel').select('*').order('created_at', { ascending: false }).limit(5),
@@ -91,6 +90,10 @@ export default function Home() {
       setLoading(false);
     }
   }
+
+  const today = new Date().toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  });
 
   return (
     <div className="p-6 space-y-6 min-h-full">

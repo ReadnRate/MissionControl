@@ -2,11 +2,25 @@
 """
 Super Data - Read & Rate: Author Lead Scraping — 2026-03-26
 Scraped via: web_search (Brave) + web_fetch
+Usage: python insert_leads_20260326.py [--confirm]   (omit --confirm for dry-run preview)
 """
-import json, re, time, urllib.request, urllib.error
+import json, os, re, time, urllib.request, urllib.error
+from pathlib import Path
 
-SUPABASE_URL = "https://zexumnlvkrjryvzrlavp.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpleHVtbmx2a3Jqcnl2enJsYXZwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjM5MzcyMywiZXhwIjoyMDg3OTY5NzIzfQ.v5Cmj_u93WcDMI3ttwYxVCPWoiblQuUJFB2MXSlO8EM"
+# Load .env from repo root (two levels up from bin/leads/)
+_env_path = Path(__file__).resolve().parents[2] / '.env'
+if _env_path.exists():
+    for _line in _env_path.read_text().splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith('#') and '=' in _line:
+            _k, _, _v = _line.partition('=')
+            os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
+
+SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
+SUPABASE_KEY = os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '')
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise SystemExit('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment.')
 
 def is_valid_email(email):
     if not email: return False

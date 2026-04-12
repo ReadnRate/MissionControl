@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 
-const TEMPLATES_DIR = "/data/.openclaw/workspace/outreach/templates";
+const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT ?? '/data/workspace';
+const TEMPLATES_DIR = `${WORKSPACE_ROOT}/outreach/templates`;
 
 export async function GET() {
   try {

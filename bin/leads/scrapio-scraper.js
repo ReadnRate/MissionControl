@@ -1,9 +1,18 @@
 #!/usr/bin/env node
+require('dotenv').config({ path: require('path').join(__dirname, '../../.env') });
 
-const SUPABASE_URL = "https://zexumnlvkrjryvzrlavp.supabase.co";
-const SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpleHVtbmx2a3Jqcnl2enJsYXZwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjM5MzcyMywiZXhwIjoyMDg3OTY5NzIzfQ.v5Cmj_u93WcDMI3ttwYxVCPWoiblQuUJFB2MXSlO8EM";
-const SCRAPIO_API_KEY = "799|F0jMs1FrXoKXWgXx0qk0iqKSWhJPfndoMvtiEMfb99bc7c45";
-const N8N_WEBHOOK_URL = "https://n8n.readnrate.com/webhook/trym-scrapio";
+const DRY_RUN = process.argv.includes('--dry-run');
+if (DRY_RUN) console.log('[DRY RUN] No writes will be made to Supabase.\n');
+
+const SUPABASE_URL            = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SCRAPIO_API_KEY         = process.env.SCRAPIO_API_KEY;
+const N8N_WEBHOOK_URL         = process.env.N8N_WEBHOOK_URL ?? "https://n8n.readnrate.com/webhook/trym-scrapio";
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SCRAPIO_API_KEY) {
+  console.error('Missing required env vars: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SCRAPIO_API_KEY');
+  process.exit(1);
+}
 
 const CITIES_LIMIT = 3; 
 const KEYWORDS = ["barber shop", "hairdresser", "hair salon"];
@@ -347,21 +356,25 @@ async function processCity(cityRecord) {
         };
       });
       
-      const insertRes = await requestSupabase(`/rest/v1/trym_leads`, 'POST', inserts, { "Prefer": "return=minimal" });
-      if (!insertRes) {
-        console.error(`  Failed to insert rows to Supabase.`);
+      if (DRY_RUN) {
+        console.log(`  [DRY RUN] Would insert ${inserts.length} leads.`);
       } else {
-        console.log(`  Inserted batch of ${inserts.length} leads.`);
+        const insertRes = await requestSupabase(`/rest/v1/trym_leads`, 'POST', inserts, { "Prefer": "return=minimal" });
+        if (!insertRes) {
+          console.error(`  Failed to insert rows to Supabase.`);
+        } else {
+          console.log(`  Inserted batch of ${inserts.length} leads.`);
+        }
       }
     }
-    
+
     // 5. Update keyword completion
     completedKeywords.push(keyword);
     let patchData = { keywords_completed: completedKeywords };
     if (completedKeywords.length >= 3) {
       patchData.status = 'done';
     }
-    await requestSupabase(`/rest/v1/scrapio_cities?id=eq.${cityRecord.id}`, 'PATCH', patchData);
+    if (!DRY_RUN) await requestSupabase(`/rest/v1/scrapio_cities?id=eq.${cityRecord.id}`, 'PATCH', patchData);
   }
   return true;
 }
