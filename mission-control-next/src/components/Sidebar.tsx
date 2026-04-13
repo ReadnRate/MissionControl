@@ -2,7 +2,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Lightbulb, Search, FileText, Settings, Target, ListTodo, Map, Users, Mail, Bot, Building2, Vote } from 'lucide-react';
+import { LayoutDashboard, Lightbulb, Search, FileText, Settings, Target, ListTodo, Map, Users, Mail, Bot, Building2, Vote, Youtube } from 'lucide-react';
 
 const menuGroups = [
   {
@@ -32,6 +32,7 @@ const menuGroups = [
       { name: 'Outreach', path: '/outreach', icon: Mail },
       { name: 'Scrap.io', path: '/scrapio', icon: Bot },
       { name: 'Cities', path: '/scrapio/cities', icon: Map },
+      { name: 'YouTube Analyzer', path: '/youtube-analyzer', icon: Youtube },
     ]
   },
   {

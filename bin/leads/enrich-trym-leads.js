@@ -227,6 +227,132 @@ function extractWorkingHours(html) {
   return null;
 }
 
+// ─── Services scraping ───────────────────────────────────────────────────────
+
+/**
+ * Extracts services with prices and images from a website.
+ * Priority: JSON-LD schema.org → dedicated services page → price pattern scan.
+ * Returns array of {name, price, description, image_url} capped at 20 items.
+ */
+async function scrapeServices(website, html, base) {
+  const services = [];
+  const seen = new Set();
+
+  function addService(name, price, description, image_url) {
+    if (!name || seen.has(name.toLowerCase().trim())) return;
+    seen.add(name.toLowerCase().trim());
+    services.push({
+      name: name.trim().substring(0, 120),
+      price: price ? price.trim().substring(0, 40) : null,
+      description: description ? description.trim().substring(0, 300) : null,
+      image_url: image_url || null,
+    });
+  }
+
+  // ── 1. JSON-LD schema.org (most reliable) ──────────────────────────────────
+  function parseJsonLd(htmlText) {
+    for (const m of htmlText.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+      try {
+        const obj = JSON.parse(m[1]);
+        const items = Array.isArray(obj) ? obj : [obj];
+        for (const item of items) {
+          // hasOfferCatalog or ItemList
+          const catalog = item.hasOfferCatalog || item.itemListElement || item.offers;
+          if (catalog) {
+            const list = Array.isArray(catalog) ? catalog : catalog.itemListElement || (catalog.itemOffered ? [catalog] : []);
+            for (const entry of list) {
+              const name = entry.name || entry.itemOffered?.name;
+              const price = entry.price || entry.offers?.price || entry.priceSpecification?.price;
+              const desc = entry.description || entry.itemOffered?.description;
+              const img = entry.image || entry.itemOffered?.image;
+              if (name) addService(name, price ? String(price) : null, desc, typeof img === 'string' ? resolveUrl(img, base) : null);
+            }
+          }
+          // Top-level Service/Product
+          if (['Service','Product','Offer'].includes(item['@type'])) {
+            const price = item.price || item.offers?.price;
+            addService(item.name, price ? String(price) : null, item.description,
+              typeof item.image === 'string' ? resolveUrl(item.image, base) : null);
+          }
+        }
+      } catch {}
+    }
+  }
+
+  parseJsonLd(html);
+
+  // ── 2. Dedicated services/menu page ────────────────────────────────────────
+  if (services.length < 3) {
+    const SERVICE_PAGE = /\/(service|menu|tarif|prix|treatment|prestation|coiffure|soin|forfait|price|offre|offer)/i;
+    const seen2 = new Set();
+    const servicePages = [];
+    for (const m of html.matchAll(/href=["']([^"'#?]{3,120})["']/gi)) {
+      const url = resolveUrl(m[1], base);
+      if (url && !seen2.has(url) && SERVICE_PAGE.test(url)) {
+        seen2.add(url);
+        servicePages.push(url);
+      }
+    }
+
+    for (const spUrl of servicePages.slice(0, 2)) {
+      try {
+        const resp = await fetchUrl(spUrl, 8000);
+        if (!resp || !resp.body) continue;
+        const spHtml = resp.body;
+
+        // Try JSON-LD on the services page first
+        parseJsonLd(spHtml);
+
+        // ── 3. Price pattern scan on the services page ──────────────────────
+        // Find all sections: split by block headings
+        const PRICE_RE = /(?:from\s+)?(?:\$|€|£|USD|CAD|EUR|GBP)\s*\d+(?:[.,]\d+)?|\d+(?:[.,]\d+)?\s*(?:\$|€|£|USD|CAD|EUR|GBP)/gi;
+        // Strip tags from sections and search for price+heading pairs
+        const stripped = spHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+        const priceMatches = [...stripped.matchAll(PRICE_RE)];
+        for (const pm of priceMatches.slice(0, 30)) {
+          const idx = pm.index ?? 0;
+          const context = stripped.substring(Math.max(0, idx - 200), idx + 50);
+          // Find the last heading-like text before the price
+          const headingM = context.match(/(?:^|[\n.!?])\s*([A-Z][^$€£\n.!?]{3,60})\s*$/);
+          if (headingM) {
+            const name = headingM[1].trim();
+            // Find an image in the same section of HTML (crude block search)
+            const blockStart = Math.max(0, spHtml.indexOf(name) - 500);
+            const blockEnd = Math.min(spHtml.length, spHtml.indexOf(name) + 500);
+            const block = spHtml.substring(blockStart, blockEnd);
+            const imgM = block.match(/<img[^>]+src=["']([^"']+)["']/i);
+            const imgUrl = imgM ? resolveUrl(imgM[1], spUrl) : null;
+            addService(name, pm[0], null, imgUrl);
+          }
+        }
+      } catch {}
+    }
+  }
+
+  // ── 3. Price pattern fallback on homepage ──────────────────────────────────
+  if (services.length === 0) {
+    const PRICE_RE = /(?:from\s+)?(?:\$|€|£|USD|CAD|EUR|GBP)\s*\d+(?:[.,]\d+)?|\d+(?:[.,]\d+)?\s*(?:\$|€|£|USD|CAD|EUR|GBP)/gi;
+    const stripped = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    const priceMatches = [...stripped.matchAll(PRICE_RE)];
+    for (const pm of priceMatches.slice(0, 20)) {
+      const idx = pm.index ?? 0;
+      const context = stripped.substring(Math.max(0, idx - 150), idx + 30);
+      const headingM = context.match(/(?:^|[\n.!?])\s*([A-Z][^$€£\n.!?]{3,50})\s*$/);
+      if (headingM) {
+        const name = headingM[1].trim();
+        const blockStart = Math.max(0, html.indexOf(name) - 400);
+        const blockEnd = Math.min(html.length, html.indexOf(name) + 400);
+        const block = html.substring(blockStart, blockEnd);
+        const imgM = block.match(/<img[^>]+src=["']([^"']+)["']/i);
+        const imgUrl = imgM ? resolveUrl(imgM[1], base) : null;
+        addService(name, pm[0], null, imgUrl);
+      }
+    }
+  }
+
+  return services.slice(0, 20);
+}
+
 // ─── Phase 1 : Website scraping ───────────────────────────────────────────────
 
 async function scrapeWebsite(website) {
@@ -334,6 +460,10 @@ async function scrapeWebsite(website) {
   // ── Working hours ──
   const hours = extractWorkingHours(html);
   if (hours) result.working_hours = hours;
+
+  // ── Services & prices ──
+  const services = await scrapeServices(website, html, base);
+  if (services && services.length > 0) result.services = JSON.stringify(services);
 
   return result;
 }
