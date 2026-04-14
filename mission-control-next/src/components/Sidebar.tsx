@@ -2,29 +2,29 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Lightbulb, Search, Calendar, FileText, Settings, Target, ListTodo, Map, Users, Mail, Bot, Building2 } from 'lucide-react';
+import { LayoutDashboard, Lightbulb, Search, FileText, Settings, Target, ListTodo, Map, Users, Mail, Bot, Building2, Vote, Youtube } from 'lucide-react';
 
 const menuGroups = [
   {
-    title: "COMMAND CENTER",
+    title: "Command Center",
     items: [
       { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-      { name: 'Tasks (Kanban)', path: '/tasks', icon: ListTodo },
+      { name: 'Tasks', path: '/tasks', icon: ListTodo },
       { name: 'Daily Brief', path: '/daily-brief', icon: FileText },
       { name: 'Roadmap', path: '/roadmap', icon: Map },
     ]
   },
   {
-    title: "CREATIVE",
+    title: "Creative",
     items: [
       { name: 'Ideas Vault', path: '/ideas', icon: Lightbulb },
-      { name: 'Ideas Vote', path: '/ideas-vote', icon: Lightbulb },
-      { name: 'Marketing Campaigns', path: '/campaigns', icon: Mail },
-      { name: 'Guerrilla Tactics', path: '/tactics', icon: Target },
+      { name: 'Ideas Vote', path: '/ideas-vote', icon: Vote },
+      { name: 'Campaigns', path: '/campaigns', icon: Mail },
+      { name: 'Tactics', path: '/tactics', icon: Target },
     ]
   },
   {
-    title: "INTELLIGENCE",
+    title: "Intelligence",
     items: [
       { name: 'Intel & Research', path: '/intel', icon: Search },
       { name: 'Author Leads', path: '/authors', icon: Users },
@@ -32,10 +32,11 @@ const menuGroups = [
       { name: 'Outreach', path: '/outreach', icon: Mail },
       { name: 'Scrap.io', path: '/scrapio', icon: Bot },
       { name: 'Cities', path: '/scrapio/cities', icon: Map },
+      { name: 'YouTube Analyzer', path: '/youtube-analyzer', icon: Youtube },
     ]
   },
   {
-    title: "SYSTEM",
+    title: "System",
     items: [
       { name: 'Settings', path: '/settings', icon: Settings },
     ]
@@ -46,20 +47,28 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 shrink-0 bg-slate-950 border-r border-slate-800 flex flex-col h-screen z-50 overflow-y-auto">
-      <div className="p-6">
-        <h1 className="text-xl font-black text-white tracking-tighter flex items-center gap-2">
-          <div className="w-8 h-8 bg-cyan-600 rounded-lg flex items-center justify-center text-white">M</div>
-          Mission Control
-        </h1>
+    <aside className="w-60 shrink-0 bg-slate-950 border-r border-slate-800/60 flex flex-col h-screen z-50 overflow-y-auto">
+      {/* Logo */}
+      <div className="px-5 py-5 border-b border-slate-800/60">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-cyan-500 flex items-center justify-center shrink-0">
+            <span className="text-slate-950 font-black text-sm leading-none">MC</span>
+          </div>
+          <div>
+            <div className="text-white font-bold text-sm leading-tight">Mission Control</div>
+            <div className="text-slate-500 text-[10px] font-medium tracking-wide">ReadnRate</div>
+          </div>
+        </div>
       </div>
-      <nav className="flex-1 px-4 space-y-6 overflow-y-auto">
+
+      {/* Nav */}
+      <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto">
         {menuGroups.map((group) => (
           <div key={group.title}>
-            <h3 className="px-3 mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <p className="px-2 mb-1.5 text-[10px] font-semibold text-slate-600 uppercase tracking-widest">
               {group.title}
-            </h3>
-            <div className="space-y-1">
+            </p>
+            <div className="space-y-0.5">
               {group.items.map((item) => {
                 const isActive = pathname === item.path;
                 const Icon = item.icon;
@@ -67,14 +76,14 @@ export default function Sidebar() {
                   <Link
                     key={item.path}
                     href={item.path}
-                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                      isActive 
-                        ? 'bg-cyan-950/50 text-cyan-400 border border-cyan-900/50 shadow-inner' 
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                    className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm font-medium transition-all ${
+                      isActive
+                        ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
+                        : 'text-slate-500 hover:text-slate-200 hover:bg-slate-800/60'
                     }`}
                   >
-                    <Icon size={18} className={isActive ? "text-cyan-400" : "text-slate-500"} />
-                    {item.name}
+                    <Icon size={15} className={isActive ? 'text-cyan-400' : 'text-slate-600'} />
+                    <span className="truncate">{item.name}</span>
                   </Link>
                 );
               })}
@@ -82,8 +91,10 @@ export default function Sidebar() {
           </div>
         ))}
       </nav>
-      <div className="p-4 border-t border-slate-800 text-xs text-slate-500 font-mono text-center">
-        V5.1 Core System
+
+      {/* Footer */}
+      <div className="px-5 py-3 border-t border-slate-800/60">
+        <p className="text-[10px] text-slate-600 font-mono">ReadnRate · Mission Control</p>
       </div>
     </aside>
   );
