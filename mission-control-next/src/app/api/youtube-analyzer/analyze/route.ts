@@ -14,8 +14,8 @@ const supabase = createClient(
 );
 
 const MINIMAX_API_KEY = process.env.MINIMAX_API_KEY;
-const MINIMAX_URL = "https://api.minimax.io/v1/chat/completions";
-const MINIMAX_MODEL = "MiniMax-Text-01";
+const MINIMAX_URL = "https://api.minimax.chat/v1/chat/completions";
+const MINIMAX_MODEL = "MiniMax-M2.7";
 
 function isYouTube(url: string): boolean {
   return /youtube\.com|youtu\.be/i.test(url);
