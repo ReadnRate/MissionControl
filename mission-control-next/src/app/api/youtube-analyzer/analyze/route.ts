@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { execFile } from "child_process";
+import { promisify } from "util";
+import { readFile, unlink } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
+
+const execFileAsync = promisify(execFile);
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -10,6 +17,18 @@ const MINIMAX_API_KEY = process.env.MINIMAX_API_KEY!;
 const MINIMAX_URL = "https://api.minimax.io/v1/chat/completions";
 const MINIMAX_MODEL = "MiniMax-Text-01";
 
+function isYouTube(url: string): boolean {
+  return /youtube\.com|youtu\.be/i.test(url);
+}
+
+function detectPlatform(url: string): string {
+  if (/youtube\.com|youtu\.be/i.test(url)) return "youtube";
+  if (/facebook\.com|fb\.watch/i.test(url)) return "facebook";
+  if (/instagram\.com/i.test(url)) return "instagram";
+  if (/tiktok\.com/i.test(url)) return "tiktok";
+  return "video";
+}
+
 function extractVideoId(url: string): string | null {
   const m =
     url.match(/[?&]v=([^&\s]+)/) ||
@@ -18,7 +37,9 @@ function extractVideoId(url: string): string | null {
   return m ? m[1] : null;
 }
 
-async function getTranscript(youtubeUrl: string): Promise<string | null> {
+// ── YouTube path: Supadata transcript API ──────────────────────────────────
+
+async function getYouTubeTranscript(youtubeUrl: string): Promise<string | null> {
   const encoded = encodeURIComponent(youtubeUrl);
   const apiKey = process.env.SUPADATA_API_KEY || "sd_9135790e9d053651876512b2785d978e";
 
@@ -50,15 +71,123 @@ async function getTranscript(youtubeUrl: string): Promise<string | null> {
   return null;
 }
 
+// ── Non-YouTube path: yt-dlp download + Whisper transcription ─────────────
+
+async function getTranscriptViaYtDlp(url: string): Promise<{
+  transcript: string | null;
+  title: string | null;
+  channel: string | null;
+  thumbnail_url: string | null;
+}> {
+  const tmpBase = join(tmpdir(), `mc-video-${Date.now()}`);
+  const downloadedFiles: string[] = [];
+
+  try {
+    // Step 1: fetch metadata (title, channel, thumbnail)
+    let title: string | null = null;
+    let channel: string | null = null;
+    let thumbnail_url: string | null = null;
+
+    try {
+      const { stdout } = await execFileAsync(
+        "yt-dlp",
+        ["--dump-json", "--no-playlist", url],
+        { timeout: 30000, maxBuffer: 2 * 1024 * 1024 }
+      );
+      const meta = JSON.parse(stdout.trim());
+      title = meta.title || null;
+      channel = meta.uploader || meta.channel || null;
+      thumbnail_url = meta.thumbnail || null;
+    } catch (e) {
+      console.error("yt-dlp metadata error:", e);
+    }
+
+    // Step 2: download best audio (native format, no ffmpeg needed)
+    const outputTemplate = `${tmpBase}.%(ext)s`;
+    await execFileAsync(
+      "yt-dlp",
+      [
+        "-x",
+        "--format", "bestaudio",
+        "--no-playlist",
+        "-o", outputTemplate,
+        url,
+      ],
+      { timeout: 180000, maxBuffer: 1024 * 1024 }
+    );
+
+    // Step 3: find the downloaded file
+    let audioFile: string | null = null;
+    for (const ext of ["m4a", "webm", "mp4", "opus", "ogg", "mp3", "flac"]) {
+      const candidate = `${tmpBase}.${ext}`;
+      try {
+        await readFile(candidate); // throws if not found
+        audioFile = candidate;
+        downloadedFiles.push(candidate);
+        break;
+      } catch {}
+    }
+
+    if (!audioFile) {
+      return { transcript: null, title, channel, thumbnail_url };
+    }
+
+    // Step 4: transcribe with Whisper
+    const audioBuffer = await readFile(audioFile);
+    const ext = audioFile.split(".").pop() ?? "m4a";
+    const mimeMap: Record<string, string> = {
+      m4a: "audio/mp4",
+      mp4: "audio/mp4",
+      webm: "audio/webm",
+      opus: "audio/ogg",
+      ogg: "audio/ogg",
+      mp3: "audio/mpeg",
+      flac: "audio/flac",
+    };
+    const mime = mimeMap[ext] ?? "audio/mp4";
+
+    const formData = new FormData();
+    formData.append("file", new Blob([audioBuffer], { type: mime }), `audio.${ext}`);
+    formData.append("model", "whisper-1");
+
+    const whisperRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+      body: formData,
+    });
+
+    if (!whisperRes.ok) {
+      const err = await whisperRes.text();
+      console.error("Whisper error:", whisperRes.status, err);
+      return { transcript: null, title, channel, thumbnail_url };
+    }
+
+    const whisperData = await whisperRes.json();
+    return {
+      transcript: whisperData.text || null,
+      title,
+      channel,
+      thumbnail_url,
+    };
+  } finally {
+    for (const f of downloadedFiles) {
+      try { await unlink(f); } catch {}
+    }
+  }
+}
+
+// ── MiniMax analysis ──────────────────────────────────────────────────────
+
 async function analyzeTranscript(
   transcript: string,
-  title: string | null
+  title: string | null,
+  platform: string
 ): Promise<{
   short_summary: string;
   detailed_summary: string;
   key_points: { text: string; context: string }[];
 } | null> {
-  const prompt = `You are analyzing a YouTube video transcript. Produce a structured analysis as valid JSON.
+  const prompt = `You are analyzing a ${platform} video transcript. Produce a structured analysis as valid JSON.
 
 Video title: ${title || "Unknown"}
 
@@ -82,7 +211,7 @@ Include 5-8 key_points. Be specific — cite actual content from the transcript.
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${MINIMAX_API_KEY}`,
+        Authorization: `Bearer ${MINIMAX_API_KEY}`,
       },
       body: JSON.stringify({
         model: MINIMAX_MODEL,
@@ -108,6 +237,8 @@ Include 5-8 key_points. Be specific — cite actual content from the transcript.
   }
 }
 
+// ── POST handler ──────────────────────────────────────────────────────────
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -117,36 +248,64 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "youtube_url is required" }, { status: 400 });
     }
 
-    const videoId = extractVideoId(youtube_url);
-    const thumbnailUrl = videoId
-      ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
-      : null;
+    const platform = detectPlatform(youtube_url);
 
-    const transcript = await getTranscript(youtube_url);
-    if (!transcript) {
-      return NextResponse.json(
-        { error: "Could not fetch transcript. The video may not have captions." },
-        { status: 422 }
-      );
-    }
-
+    let transcript: string | null = null;
     let title: string | null = null;
     let channel: string | null = null;
-    try {
-      const pageRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-        headers: { "User-Agent": "Mozilla/5.0" },
-      });
-      const html = await pageRes.text();
-      const titleM = html.match(/"title":"([^"]+)"/);
-      if (titleM) title = titleM[1];
-      const channelM = html.match(/"ownerChannelName":"([^"]+)"/);
-      if (channelM) channel = channelM[1];
-    } catch {}
+    let thumbnailUrl: string | null = null;
 
-    const analysis = await analyzeTranscript(transcript, title);
+    if (isYouTube(youtube_url)) {
+      // YouTube: Supadata transcript + page scrape for metadata
+      const videoId = extractVideoId(youtube_url);
+      thumbnailUrl = videoId
+        ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+        : null;
+
+      transcript = await getYouTubeTranscript(youtube_url);
+
+      if (!transcript) {
+        return NextResponse.json(
+          { error: "Could not fetch transcript. The video may not have captions." },
+          { status: 422 }
+        );
+      }
+
+      try {
+        const pageRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+          headers: { "User-Agent": "Mozilla/5.0" },
+        });
+        const html = await pageRes.text();
+        const titleM = html.match(/"title":"([^"]+)"/);
+        if (titleM) title = titleM[1];
+        const channelM = html.match(/"ownerChannelName":"([^"]+)"/);
+        if (channelM) channel = channelM[1];
+      } catch {}
+    } else {
+      // Facebook / Instagram / TikTok: yt-dlp + Whisper
+      const result = await getTranscriptViaYtDlp(youtube_url);
+      transcript = result.transcript;
+      title = result.title;
+      channel = result.channel;
+      thumbnailUrl = result.thumbnail_url;
+
+      if (!transcript) {
+        return NextResponse.json(
+          {
+            error:
+              "Could not transcribe video. Make sure the URL is public and the video has audio.",
+          },
+          { status: 422 }
+        );
+      }
+    }
+
+    const analysis = await analyzeTranscript(transcript, title, platform);
     if (!analysis) {
       return NextResponse.json({ error: "Analysis failed" }, { status: 500 });
     }
+
+    const videoId = isYouTube(youtube_url) ? extractVideoId(youtube_url) : null;
 
     const { data, error } = await supabase
       .from("video_analyses")
@@ -168,7 +327,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ data });
   } catch (err: any) {
-    console.error("YouTube analyze error:", err);
+    console.error("Video analyze error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
