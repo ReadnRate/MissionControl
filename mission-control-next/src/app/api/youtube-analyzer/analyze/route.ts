@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import Anthropic from "@anthropic-ai/sdk";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-});
+const MINIMAX_API_KEY = process.env.MINIMAX_API_KEY!;
+const MINIMAX_URL = "https://api.minimax.io/v1/chat/completions";
+const MINIMAX_MODEL = "MiniMax-Text-01";
 
 function extractVideoId(url: string): string | null {
   const m =
@@ -21,22 +20,18 @@ function extractVideoId(url: string): string | null {
 
 async function getTranscript(youtubeUrl: string): Promise<string | null> {
   const encoded = encodeURIComponent(youtubeUrl);
-  const apiKey = "sd_9135790e9d053651876512b2785d978e";
+  const apiKey = process.env.SUPADATA_API_KEY || "sd_9135790e9d053651876512b2785d978e";
 
-  // Initial request
   const res = await fetch(
     `https://api.supadata.ai/v1/transcript?url=${encoded}&text=true`,
     { headers: { "x-api-key": apiKey } }
   );
 
   if (!res.ok) return null;
-
   const data = await res.json();
 
-  // Synchronous response
   if (data.content) return data.content;
 
-  // Async job (202)
   if (data.jobId) {
     for (let i = 0; i < 15; i++) {
       await new Promise((r) => setTimeout(r, 3000));
@@ -83,18 +78,32 @@ Return ONLY valid JSON with this exact structure (no markdown, no code blocks):
 Include 5-8 key_points. Be specific — cite actual content from the transcript.`;
 
   try {
-    const response = await anthropic.messages.create({
-      model: "claude-opus-4-6",
-      max_tokens: 4096,
-      messages: [{ role: "user", content: prompt }],
+    const res = await fetch(MINIMAX_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${MINIMAX_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: MINIMAX_MODEL,
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 4096,
+        temperature: 0.3,
+      }),
     });
 
-    const text =
-      response.content[0].type === "text" ? response.content[0].text : "";
-    // Strip any accidental markdown fences
+    if (!res.ok) {
+      const err = await res.text();
+      console.error("MiniMax error:", res.status, err);
+      return null;
+    }
+
+    const data = await res.json();
+    const text: string = data.choices?.[0]?.message?.content ?? "";
     const clean = text.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
     return JSON.parse(clean);
-  } catch {
+  } catch (e) {
+    console.error("analyzeTranscript error:", e);
     return null;
   }
 }
@@ -113,7 +122,6 @@ export async function POST(req: NextRequest) {
       ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
       : null;
 
-    // Get transcript from Supadata
     const transcript = await getTranscript(youtube_url);
     if (!transcript) {
       return NextResponse.json(
@@ -122,7 +130,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Extract title from YouTube page (best-effort)
     let title: string | null = null;
     let channel: string | null = null;
     try {
@@ -136,13 +143,11 @@ export async function POST(req: NextRequest) {
       if (channelM) channel = channelM[1];
     } catch {}
 
-    // Analyze with Claude
     const analysis = await analyzeTranscript(transcript, title);
     if (!analysis) {
       return NextResponse.json({ error: "Analysis failed" }, { status: 500 });
     }
 
-    // Store in Supabase
     const { data, error } = await supabase
       .from("video_analyses")
       .insert({
