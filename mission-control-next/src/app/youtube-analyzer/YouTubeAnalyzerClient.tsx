@@ -59,9 +59,9 @@ export default function YouTubeAnalyzerClient({ initialAnalyses }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-white">YouTube Analyzer</h1>
+          <h1 className="text-xl font-bold text-white">Video Analyzer</h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Analyze any YouTube video — transcript, summary, key moments
+            YouTube · Facebook Reels · Instagram Reels · TikTok — transcript, summary, key moments
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs text-slate-400 font-mono bg-slate-800/50 border border-slate-700/50 px-3 py-1.5 rounded-full">
@@ -82,7 +82,7 @@ export default function YouTubeAnalyzerClient({ initialAnalyses }: Props) {
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !loading && handleAnalyze()}
-            placeholder="https://www.youtube.com/watch?v=..."
+            placeholder="YouTube, Facebook Reel, Instagram Reel, TikTok URL…"
             className="flex-1 bg-slate-900 border border-slate-700/60 rounded-lg px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500/60 font-mono"
           />
           <select
@@ -120,7 +120,7 @@ export default function YouTubeAnalyzerClient({ initialAnalyses }: Props) {
         )}
         {loading && (
           <p className="text-xs text-slate-500 font-mono animate-pulse">
-            Fetching transcript and analyzing with Claude… this may take 30-60s
+            Fetching transcript and analyzing… this may take 30-90s for Reels/TikTok
           </p>
         )}
       </div>
@@ -129,7 +129,7 @@ export default function YouTubeAnalyzerClient({ initialAnalyses }: Props) {
       {analyses.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-48 text-slate-600 space-y-2">
           <Youtube size={32} className="opacity-30" />
-          <p className="text-sm">No videos analyzed yet. Paste a URL above to get started.</p>
+          <p className="text-sm">No videos analyzed yet. Paste a YouTube, Facebook, Instagram, or TikTok URL above.</p>
         </div>
       ) : (
         <div className="space-y-3">
