@@ -201,18 +201,32 @@ async function getTranscriptViaYtDlp(url: string): Promise<{
 async function analyzeTranscript(
   transcript: string,
   title: string | null,
-  platform: string
+  platform: string,
+  project: string
 ): Promise<{
-  result: { short_summary: string; detailed_summary: string; key_points: { text: string; context: string }[] } | null;
+  result: { short_summary: string; detailed_summary: string; key_points: { text: string; context: string }[]; project_assessment: string } | null;
   error?: string;
 }> {
   if (!MINIMAX_API_KEY) {
     return { result: null, error: "MINIMAX_API_KEY env var is not set" };
   }
 
+  const projectContext = (() => {
+    if (project === "readnrate") {
+      return `\n\nAlso provide a "Project Assessment" section (appended to detailed_summary) with heading "## Project Assessment: Read & Rate" analyzing how this video's content, strategy, tools, and lessons could benefit the Read & Rate platform (a book review and marketing SaaS for indie authors). Include: 1) Content ideas and hooks relevant to book marketing, 2) Audience targeting strategies, 3) Tools and techniques to adopt, 4) Potential partnerships or guest opportunities, 5) Marketing channels to leverage.`;
+    }
+    if (project === "trym") {
+      return `\n\nAlso provide a "Project Assessment" section (appended to detailed_summary) with heading "## Project Assessment: Trym" analyzing how this video's content, strategy, tools, and lessons could benefit Trym (a local business directory and review platform). Include: 1) Features or UX patterns to replicate, 2) Data sources and enrichment strategies, 3) Outreach or partnership approaches, 4) Monetization tactics shown, 5) SEO or local search strategies.`;
+    }
+    if (project === "general") {
+      return `\n\nAlso provide a "Project Assessment" section (appended to detailed_summary) with heading "## Project Assessment: Read & Rate + Trym" analyzing how this video's content could benefit BOTH projects:\n\n**Read & Rate** (book review/marketing SaaS for indie authors): Content ideas, marketing hooks, audience strategies, tools, partnership opportunities.\n\n**Trym** (local business directory/review platform): Features to replicate, data strategies, outreach approaches, monetization tactics, local SEO strategies.`;
+    }
+    return "";
+  })();
+
   const prompt = `You are analyzing a ${platform} video transcript. Produce a structured analysis as valid JSON.
 
-Video title: ${title || "Unknown"}
+Video title: ${title || "Unknown"}${projectContext}
 
 Transcript:
 ${transcript.substring(0, 12000)}
@@ -340,7 +354,7 @@ export async function POST(req: NextRequest) {
 
     console.log("[analyze] transcript length:", transcript.length);
 
-    const { result: analysis, error: analysisError } = await analyzeTranscript(transcript, title, platform);
+    const { result: analysis, error: analysisError } = await analyzeTranscript(transcript, title, platform, project);
 
     if (!analysis) {
       console.error("[analyze] analysis failed:", analysisError);

@@ -37,3 +37,11 @@
 - **Firecrawl is last resort** — most expensive. Only when `web_fetch` + Tavily both fail.
 - **Cron/OpenClaw agentTurn jobs**: NEVER use `agentTurn` payload for monitoring-only tasks. Use Linux cron or PM2 scripts. `agentTurn` = full LLM context loaded = $$$ per call. `systemEvent` = $0.
 - **Track API spend** — log all paid API calls in a local file or Supabase `api_usage` table.
+
+### Delegation & Brief Quality (LRN-20260415-003)
+- **BRIEF IN PROSE NOT CODE**: When delegating to Forge (or any subagent), always write in natural language prose describing UX behavior — NOT TypeScript, NOT JSX, NOT code. The developer knows how to build it; Joe describes what it does and how it behaves.
+- **INCLUDE EVERYTHING**: Every brief must cover: (1) complete user interaction flows, (2) all UI states (default/hover/success/error/loading/empty), (3) error handling for every action, (4) classification/filtering/deduplication criteria, (5) test scenarios.
+- **Format pattern**: "When user clicks [X] → [Y] happens → [Z] saved to [DB] → [W] feedback to user"
+- **NEVER SAY "optional"**: If the feature is requested, it's required. No "UI optional, can skip".
+- **Example GOOD brief**: "L'utilisateur voit une liste d'emails. Chaque email a 3 boutons: [TASK] [INTEL] [SUPPRIMER]. Quand il clique [TASK] → modal s'ouvre avec titre pré-rempli + description pré-remplie (résumé + liens) + dropdown projet + dropdown priorité → bouton CONFIRMER → insert Supabase → toast succès → modal se ferme."
+- **Example BAD brief**: "Create TaskModal component with interface TaskModalProps { email, onConfirm }"

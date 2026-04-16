@@ -660,6 +660,8 @@ async function processBatch(data) {
       const toWrite = Object.fromEntries(
         Object.entries(updates).filter(([, v]) => v !== null && v !== undefined && v !== '')
       );
+      // Bump created_at so this lead surfaces in Mission Control (ordered desc)
+      toWrite.created_at = new Date().toISOString();
 
       await supabaseUpdate(id, toWrite);
       console.log(`  ✓ Saved ${Object.keys(toWrite).length} fields`);
