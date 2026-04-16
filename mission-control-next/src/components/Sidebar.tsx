@@ -2,7 +2,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Lightbulb, Search, FileText, Settings, Target, ListTodo, Map, Users, Mail, Bot, Building2, Vote, Youtube } from 'lucide-react';
+import { LayoutDashboard, Lightbulb, Search, FileText, Settings, Target, ListTodo, Map, Users, Mail, Bot, Building2, Vote, Youtube, Inbox } from 'lucide-react';
 
 const menuGroups = [
   {
@@ -27,6 +27,7 @@ const menuGroups = [
     title: "Intelligence",
     items: [
       { name: 'Intel & Research', path: '/intel', icon: Search },
+      { name: 'Emails', path: '/emails', icon: Inbox },
       { name: 'Author Leads', path: '/authors', icon: Users },
       { name: 'Trym Leads', path: '/trym-leads', icon: Building2 },
       { name: 'Outreach', path: '/outreach', icon: Mail },
