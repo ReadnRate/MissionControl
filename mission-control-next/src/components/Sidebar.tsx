@@ -2,7 +2,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Lightbulb, Search, FileText, Settings, Target, ListTodo, Map, Users, Mail, Bot, Building2, Vote, Youtube, Inbox } from 'lucide-react';
+import { LayoutDashboard, Lightbulb, Search, FileText, Settings, Target, ListTodo, Map, Users, Mail, Bot, Building2, Vote, Youtube, Inbox, ClipboardCheck } from 'lucide-react';
 
 const menuGroups = [
   {
@@ -21,6 +21,12 @@ const menuGroups = [
       { name: 'Ideas Vote', path: '/ideas-vote', icon: Vote },
       { name: 'Campaigns', path: '/campaigns', icon: Mail },
       { name: 'Tactics', path: '/tactics', icon: Target },
+    ]
+  },
+  {
+    title: "Reels",
+    items: [
+      { name: 'Scripts to Review', path: '/reels/scripts', icon: ClipboardCheck },
     ]
   },
   {
