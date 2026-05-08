@@ -1,9 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Fix workspace root detection when multiple lockfiles exist
+  // Pin Turbopack to this directory so workspace lockfile auto-detection
+  // doesn't traverse upward into the parent monorepo workspace.
   turbopack: {
-    root: "/data/.openclaw/workspace/mission-control-next",
+    root: import.meta.dirname,
   },
 };
 
