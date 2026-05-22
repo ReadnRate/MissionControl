@@ -136,7 +136,7 @@ export function TripComparator({ options }: Props) {
                     )}
                   </td>
                   <td className="p-3 text-right tabular-nums text-slate-300">
-                    {s.durationHours ? `${s.durationHours}h` : "—"}
+                    {s.durationHours ? `${s.durationHours}h` : "..."}
                   </td>
                   <td className="p-3">
                     <span
